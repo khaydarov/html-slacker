@@ -1,5 +1,11 @@
-from html.parser import HTMLParser
-from html.entities import name2codepoint
+try:
+    from html.parser import HTMLParser
+    from html.entities import name2codepoint
+except ImportError:
+    from HTMLParser import HTMLParser
+    from htmlentitydefs import name2codepoint
+
+LINEBR = "::LINEBR::"
 
 
 class HTMLSlacker(HTMLParser):
@@ -12,7 +18,11 @@ class HTMLSlacker(HTMLParser):
     def __init__(self, html, *args, **kwargs):
 
         # call parent constructor __init__
-        super().__init__(*args, **kwargs)
+        try:
+            super().__init__(*args, **kwargs)
+        except TypeError:
+            HTMLParser.__init__(self, *args, **kwargs)
+        self.skip = False
 
         # slackified string
         self.output = ''
@@ -30,7 +40,8 @@ class HTMLSlacker(HTMLParser):
         :param attrs: we need to recover attributes of anchor
         :return:
         """
-
+        if tag == 'br' or tag == 'p':
+            self.output += LINEBR
         if tag == 'b' or tag == 'strong':
             self.output += '*'
         if tag == 'i' or tag == 'em':
@@ -40,7 +51,10 @@ class HTMLSlacker(HTMLParser):
         if tag == 'a':
             self.output += '<'
             for attr in attrs:
-                self.output += attr[1] + '|'
+                if attr[0] == 'href':
+                    self.output += attr[1] + '|'
+        if tag == 'style' or tag == 'script':
+            self.skip = True
 
     def handle_endtag(self, tag):
         """
@@ -56,6 +70,8 @@ class HTMLSlacker(HTMLParser):
             self.output += '>'
         if tag == 'code':
             self.output += '`'
+        if tag == 'style' or tag == 'script':
+            self.skip = False
 
     def handle_data(self, data):
         """
@@ -63,7 +79,8 @@ class HTMLSlacker(HTMLParser):
         :param data:
         :return:
         """
-        self.output += data
+        if not self.skip:
+            self.output += data
 
     def handle_comment(self, data):
         pass
@@ -88,4 +105,4 @@ class HTMLSlacker(HTMLParser):
         link: https://stackoverflow.com/questions/2077897/substitute-multiple-whitespace-with-single-whitespace-in-python
         :return:
         """
-        return ' '.join(self.output.split())
+        return ' '.join(self.output.split()).replace(LINEBR, "\n")
